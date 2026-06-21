@@ -288,10 +288,15 @@ function addItem(){
 
   bill.push({ name, qty, price, total: qty * price });
 
+  // if this item came from a barcode scan, remember it for next time
+  if(pendingBarcode){
+    rememberBarcode(pendingBarcode, name, price);
+    pendingBarcode = null;
+  }
+
   document.getElementById('i-name').value = '';
   document.getElementById('i-price').value = '';
   document.getElementById('i-qty').value = '1';
-  pendingBarcode = null;
 
   renderBill();
   toast('✅ ' + name + ' add ho gaya');
@@ -442,17 +447,50 @@ function closeScanner(){
   document.getElementById('scanner-overlay').classList.remove('open');
 }
 
+// ══════════════ BARCODE MEMORY (remembers name+price per barcode, offline) ══════════════
+function loadBarcodeMemory(){
+  try{
+    return JSON.parse(localStorage.getItem('shakirBarcodeMemory') || '{}');
+  }catch(e){ return {}; }
+}
+function saveBarcodeMemory(map){
+  try{ localStorage.setItem('shakirBarcodeMemory', JSON.stringify(map)); }catch(e){}
+}
+function rememberBarcode(code, name, price){
+  if(!code) return;
+  const map = loadBarcodeMemory();
+  map[code] = { name, price };
+  saveBarcodeMemory(map);
+}
+function lookupBarcode(code){
+  const map = loadBarcodeMemory();
+  return map[code] || null;
+}
+
 function handleScan(code){
   scannerActive = false;
   stopCamera();
   closeScanner();
-  toast('📷 Barcode mila: ' + code, 2500);
-  // Manual workflow: fill the name field with the scanned code so the
-  // shopkeeper can type the real item name + price, matching the
-  // simple "manual + scan" flow requested.
-  document.getElementById('i-name').value = code;
-  document.getElementById('i-name').focus();
-  document.getElementById('i-name').select();
+
+  const known = lookupBarcode(code);
+  if(known){
+    // already known item — fill everything in, ready to add with one tap
+    document.getElementById('i-name').value = known.name;
+    document.getElementById('i-price').value = known.price;
+    document.getElementById('i-qty').value = '1';
+    pendingBarcode = code;
+    toast('✅ ' + known.name + ' mil gaya — qty check karein aur Add karein', 2800);
+    document.getElementById('i-qty').focus();
+    document.getElementById('i-qty').select();
+  } else {
+    // new barcode — shopkeeper types name+price once, it gets remembered
+    document.getElementById('i-name').value = '';
+    document.getElementById('i-price').value = '';
+    document.getElementById('i-qty').value = '1';
+    pendingBarcode = code;
+    toast('📷 Naya item — naam aur price likhein (yaad ho jayega)', 3000);
+    document.getElementById('i-name').focus();
+  }
 }
 
 // ══════════════ PRINT PREVIEW ══════════════
